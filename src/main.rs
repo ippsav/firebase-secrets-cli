@@ -1,3 +1,18 @@
+use clap::Parser;
+
+
+
+pub mod cli;
+
+use cli::*;
+
+
 fn main() {
-    println!("Hello, world!");
+    let cli = Cli::parse();
+
+    match cli.commands{
+        Commands::Set(options) => {
+            dbg!(options);
+        },
+    }
 }
