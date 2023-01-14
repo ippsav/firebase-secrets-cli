@@ -19,4 +19,10 @@ pub struct Set {
     pub secret: Option<String>,
     #[arg(short, long, help = "Path to a file as a source of secrets")]
     pub path: Option<String>,
+    #[arg(
+        short,
+        long,
+        help = "Set your project alias (default, dev, staging, your_project)"
+    )]
+    pub alias: String,
 }
