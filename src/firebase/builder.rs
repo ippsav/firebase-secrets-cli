@@ -6,12 +6,14 @@ use super::FirebaseInterface;
 
 pub struct FirebaseInterfaceBuilder {
     hash_map: HashMap<String, String>,
+    alias: Option<String>,
 }
 
 impl FirebaseInterfaceBuilder {
     pub fn builder() -> Self {
         Self {
             hash_map: HashMap::new(),
+            alias: None,
         }
     }
 
@@ -23,6 +25,10 @@ impl FirebaseInterfaceBuilder {
         }
 
         Ok(())
+    }
+
+    pub fn set_alias(&mut self, alias: String) {
+        self.alias = Some(alias);
     }
 
     pub fn add_secret(&mut self, secret: String) -> Result<(), BuilderError> {
@@ -37,9 +43,14 @@ impl FirebaseInterfaceBuilder {
         Ok(())
     }
 
-    pub fn build(self) -> FirebaseInterface {
-        dbg!(&self.hash_map);
-        FirebaseInterface::new(self.hash_map)
+    pub fn build(self) -> Result<FirebaseInterface, BuilderError> {
+        let alias = match self.alias {
+            Some(v) => v,
+            None => {
+                return Err(BuilderError::ProjectAliasNotSetError);
+            }
+        };
+        Ok(FirebaseInterface::new(self.hash_map, alias))
     }
 }
 
@@ -49,6 +60,8 @@ pub enum BuilderError {
     Io(#[from] io::Error),
     #[error("secret `{0}` is in an invalid format")]
     InvalidSecretFormat(String),
+    #[error("error project alias not set")]
+    ProjectAliasNotSetError,
 }
 
 #[cfg(test)]
@@ -87,7 +100,8 @@ mod test {
         let mut builder = FirebaseInterfaceBuilder::builder();
         let source = r#"KEY1=VALUE1
 KEY2=VALUE2
-KEY3=VALUE=3="#
+KEY3=VALUE=3=
+"#
             .as_bytes();
 
         assert!(builder.from_source(source).is_ok());
