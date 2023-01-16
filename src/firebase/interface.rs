@@ -1,13 +1,14 @@
-use indicatif::ParallelProgressIterator;
-use rayon::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::{
     collections::HashMap,
     fmt::Display,
     io::{self, Write},
     process::{Command, Stdio},
     string::FromUtf8Error,
+    time::Duration,
 };
 use thiserror::Error;
+use tokio::task::JoinHandle;
 
 pub struct FirebaseInterface {
     hash_map: HashMap<String, String>,
@@ -16,7 +17,7 @@ pub struct FirebaseInterface {
 
 impl FirebaseInterface {
     pub fn new(hash_map: HashMap<String, String>, alias: String) -> Self {
-        Self { hash_map , alias}
+        Self { hash_map, alias }
     }
 
     fn set_project(&self) -> Result<(), FirebaseInterfaceError> {
@@ -69,18 +70,31 @@ impl FirebaseInterface {
         };
         Ok(())
     }
-    pub fn set_secrets(&self) -> Result<(), FirebaseInterfaceError> {
+    pub async fn set_secrets(self) -> Result<(), FirebaseInterfaceError> {
         self.set_project()?;
-        println!("Setting secrets...");
-        self.hash_map
-            .par_iter()
-            .progress_count(self.hash_map.len() as u64)
-            .try_for_each(|(k, v)| {
-                if let Err(err) = Self::set_secret(k, v) {
-                    return Err(err);
-                };
-                Ok(())
-            })?;
+        let bar = ProgressBar::new(1);
+
+        bar.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner} {msg}")
+                .unwrap(),
+        );
+        bar.enable_steady_tick(Duration::from_millis(10));
+        bar.set_message("Setting secrets...");
+
+        // tokio approach
+        let handles: Vec<JoinHandle<Result<(), FirebaseInterfaceError>>> = self
+            .hash_map
+            .into_iter()
+            .map(|(k, v)| tokio::spawn(async move { Self::set_secret(&k, &v) }))
+            .collect();
+
+        for h in handles {
+            if let Err(err) = h.await.unwrap() {
+                return Err(err);
+            };
+        }
+        bar.finish_with_message("All secrets are set !");
         Ok(())
     }
 }
