@@ -21,7 +21,11 @@ impl FirebaseInterfaceBuilder {
         let buf_reader = BufReader::new(source);
 
         for line in buf_reader.lines() {
-            self.add_secret(line?)?;
+            let value = line?;
+            if value.is_empty() || value.trim_start().starts_with('#') {
+                continue;
+            };
+            self.add_secret(value)?;
         }
 
         Ok(())
@@ -34,7 +38,16 @@ impl FirebaseInterfaceBuilder {
     pub fn add_secret(&mut self, secret: String) -> Result<(), BuilderError> {
         match secret.split_once('=') {
             Some((key, value)) => {
-                self.hash_map.insert(key.into(), value.into());
+                let raw_value = match value.split_once('#') {
+                    Some((val, _)) => val.trim(),
+                    None => value.trim(),
+                };
+                if raw_value.starts_with('"') && raw_value.ends_with('"') {
+                    self.hash_map
+                        .insert(key.into(), raw_value[1..raw_value.len() - 1].into());
+                } else {
+                    self.hash_map.insert(key.into(), raw_value.into());
+                };
             }
             None => {
                 return Err(BuilderError::InvalidSecretFormat(secret.into()));
@@ -102,7 +115,7 @@ mod test {
 KEY2=VALUE2
 KEY3=VALUE=3=
 "#
-            .as_bytes();
+        .as_bytes();
 
         assert!(builder.from_source(source).is_ok());
 
@@ -110,6 +123,26 @@ KEY3=VALUE=3=
         hash_map.insert("KEY1".into(), "VALUE1".into());
         hash_map.insert("KEY2".into(), "VALUE2".into());
         hash_map.insert("KEY3".into(), "VALUE=3=".into());
+
+        assert_eq!(hash_map, builder.hash_map);
+    }
+
+    #[test]
+    fn add_secrets_from_source_export_from_firebase() {
+        let mut builder = FirebaseInterfaceBuilder::builder();
+        let source = r#"KEY1="VALUE1"
+KEY2=VALUE2
+#### COMMENT
+KEY3="VAL3"                 # comment
+"#
+        .as_bytes();
+
+        assert!(builder.from_source(source).is_ok());
+
+        let mut hash_map = HashMap::new();
+        hash_map.insert("KEY1".into(), "VALUE1".into());
+        hash_map.insert("KEY2".into(), "VALUE2".into());
+        hash_map.insert("KEY3".into(), "VAL3".into());
 
         assert_eq!(hash_map, builder.hash_map);
     }
