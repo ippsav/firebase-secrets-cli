@@ -63,6 +63,9 @@ impl FirebaseInterfaceBuilder {
                 return Err(BuilderError::ProjectAliasNotSetError);
             }
         };
+        if self.hash_map.is_empty() {
+           return Err(BuilderError::NoSecretsError);
+        };
         Ok(FirebaseInterface::new(self.hash_map, alias))
     }
 }
@@ -75,6 +78,8 @@ pub enum BuilderError {
     InvalidSecretFormat(String),
     #[error("error project alias not set")]
     ProjectAliasNotSetError,
+    #[error("error no secrets found")]
+    NoSecretsError
 }
 
 #[cfg(test)]
