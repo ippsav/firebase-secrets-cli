@@ -7,7 +7,8 @@ pub mod cli;
 
 use cli::*;
 
-fn main() -> Result<(), BuilderError> {
+#[tokio::main]
+async fn main() -> Result<(), BuilderError> {
     let cli = Cli::parse();
 
     match cli.commands {
@@ -39,7 +40,7 @@ fn main() -> Result<(), BuilderError> {
             }
             let firebase_interface = builder.build()?;
 
-            if let Err(err) = firebase_interface.set_secrets() {
+            if let Err(err) = firebase_interface.set_secrets().await {
                 println!("{err}");
             }
         }
