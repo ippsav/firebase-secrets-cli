@@ -50,7 +50,7 @@ impl FirebaseInterfaceBuilder {
                 };
             }
             None => {
-                return Err(BuilderError::InvalidSecretFormat(secret.into()));
+                return Err(BuilderError::InvalidSecretFormat(secret));
             }
         };
         Ok(())

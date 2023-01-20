@@ -29,7 +29,7 @@ async fn main() -> Result<(), BuilderError> {
                 let file = match File::open(path) {
                     Ok(v) => v,
                     Err(err) => {
-                        println!("error opening file, {}", err.to_string());
+                        println!("error opening file, {}", err);
                         return Ok(());
                     }
                 };
