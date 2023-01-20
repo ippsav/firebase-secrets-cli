@@ -1,4 +1,4 @@
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle, style::TemplateError};
 use std::{
     collections::HashMap,
     fmt::Display,
@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::task::JoinHandle;
+use tokio::task::{JoinHandle, JoinError};
 
 pub struct FirebaseInterface {
     hash_map: HashMap<String, String>,
@@ -55,6 +55,7 @@ impl FirebaseInterface {
         writeln!(child.stdin.as_mut().unwrap(), "{value}")
             .map_err(|err| FirebaseInterfaceError::io_error("debug", err))?;
 
+
         let stdout_output = child
             .wait_with_output()
             .map_err(|err| FirebaseInterfaceError::io_error("debug", err))?;
@@ -76,8 +77,7 @@ impl FirebaseInterface {
 
         bar.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner} {msg}")
-                .unwrap(),
+                .template("{spinner} {msg}")?
         );
         bar.enable_steady_tick(Duration::from_millis(10));
         bar.set_message("Setting secrets...");
@@ -90,9 +90,7 @@ impl FirebaseInterface {
             .collect();
 
         for h in handles {
-            if let Err(err) = h.await.unwrap() {
-                return Err(err);
-            };
+            h.await??;
         }
         bar.finish_with_message("All secrets are set !");
         Ok(())
@@ -113,11 +111,25 @@ pub enum FirebaseInterfaceError {
     },
     FirebaseError(String),
     StringParse(FromUtf8Error),
+    RuntimeError(JoinError),
+    IndicatifError(TemplateError),
 }
 
 impl From<FromUtf8Error> for FirebaseInterfaceError {
     fn from(value: FromUtf8Error) -> Self {
         Self::StringParse(value)
+    }
+}
+
+impl From<JoinError> for FirebaseInterfaceError {
+    fn from(value: JoinError) -> Self {
+        Self::RuntimeError(value)
+    }
+}
+
+impl From<TemplateError> for FirebaseInterfaceError {
+    fn from(value: TemplateError) -> Self {
+        Self::IndicatifError(value)
     }
 }
 
@@ -141,7 +153,7 @@ impl Display for FirebaseInterfaceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FirebaseInterfaceError::Io { msg, source } => {
-                write!(f, "{}, source: {:?}", msg, source)
+                write!(f, "{msg}, source: {source}")
             }
             FirebaseInterfaceError::SecretSetError {
                 key,
@@ -152,8 +164,14 @@ impl Display for FirebaseInterfaceError {
                 write!(f, "{err}")
             }
             FirebaseInterfaceError::StringParse(err) => {
-                write!(f, "error parsing firebase output: {:?}", err)
+                write!(f, "error parsing firebase output: {err}")
             }
+            FirebaseInterfaceError::RuntimeError(err) => {
+                write!(f, "tokio runtime error: {err}")
+            },
+            FirebaseInterfaceError::IndicatifError(err) => {
+                write!(f, "indicatif error: {err}")
+            },
         }
     }
 }
