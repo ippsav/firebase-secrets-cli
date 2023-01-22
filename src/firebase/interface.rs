@@ -8,19 +8,24 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::task::{JoinHandle, JoinError};
+use tokio::task::JoinError;
+use tokio::sync::mpsc;
+
+
+type Result<T> = std::result::Result<T, FirebaseInterfaceError>;
 
 pub struct FirebaseInterface {
     hash_map: HashMap<String, String>,
     alias: String,
 }
 
+
 impl FirebaseInterface {
     pub fn new(hash_map: HashMap<String, String>, alias: String) -> Self {
         Self { hash_map, alias }
     }
 
-    fn set_project(&self) -> Result<(), FirebaseInterfaceError> {
+    fn set_project(&self) -> Result<()> {
         println!("Setting project alias to {}...", &self.alias);
         let child = Command::new("firebase")
             .arg("use")
@@ -42,7 +47,7 @@ impl FirebaseInterface {
         println!("Project is set to {}", &self.alias);
         Ok(())
     }
-    fn set_secret(key: &str, value: &str) -> Result<(), FirebaseInterfaceError> {
+    fn set_secret(key: &str, value: &str) -> Result<()> {
         let mut child = Command::new("firebase")
             .arg("functions:secrets:set")
             .arg(key)
@@ -71,7 +76,7 @@ impl FirebaseInterface {
         };
         Ok(())
     }
-    pub async fn set_secrets(self) -> Result<(), FirebaseInterfaceError> {
+    pub async fn set_secrets(self) -> Result<()> {
         self.set_project()?;
         let bar = ProgressBar::new(1);
 
@@ -82,16 +87,24 @@ impl FirebaseInterface {
         bar.enable_steady_tick(Duration::from_millis(10));
         bar.set_message("Setting secrets...");
 
-        // tokio approach
-        let handles: Vec<JoinHandle<Result<(), FirebaseInterfaceError>>> = self
-            .hash_map
-            .into_iter()
-            .map(|(k, v)| tokio::spawn(async move { Self::set_secret(&k, &v) }))
-            .collect();
+        //mspc channel approach
+        let (tx, mut rx)  = mpsc::channel(100);
 
-        for h in handles {
-            h.await??;
-        }
+        self.hash_map
+            .into_iter()
+            .for_each(|(k,v)| {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    tx.send(Self::set_secret(&k, &v)).await.unwrap();
+                });
+            });
+
+        drop(tx);
+
+        while let Some(res) = rx.recv().await {
+            res?;
+        };
+
         bar.finish_with_message("All secrets are set !");
         Ok(())
     }
