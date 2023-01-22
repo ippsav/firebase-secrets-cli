@@ -21,7 +21,7 @@ async fn main() -> Result<(), BuilderError> {
             }
             if let Some(secret) = options.secret {
                 if let Err(err) = builder.add_secret(secret) {
-                    println!("{}", err);
+                    println!("{err}");
                     return Err(err);
                 };
             };
@@ -34,7 +34,7 @@ async fn main() -> Result<(), BuilderError> {
                     }
                 };
                 if let Err(err) = builder.from_source(file) {
-                    println!("{}", err);
+                    println!("{err}");
                     return Err(err);
                 };
             }
