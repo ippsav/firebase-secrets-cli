@@ -57,7 +57,7 @@ impl FirebaseInterface {
             .spawn()
             .map_err(|err| FirebaseInterfaceError::io_error("could not run firebase command, check if firebase-tools are installed in your machine", err))?;
 
-        writeln!(child.stdin.as_mut().unwrap(), "{value}")
+        write!(child.stdin.as_mut().unwrap(), "{value}")
             .map_err(|err| FirebaseInterfaceError::io_error("debug", err))?;
 
 
